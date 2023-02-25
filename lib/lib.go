@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log"
 	"os"
@@ -19,7 +20,8 @@ const (
 	TREE             GitObjectType = "tree"
 	BLOB             GitObjectType = "blob"
 	GIT_OBJ_NAME_LEN               = 2
-	GIT_OBJ_BUF_SIZE               = 512
+	// TODO: Think about a buffer size
+	GIT_OBJ_BUF_SIZE = 4096
 )
 
 type GitObject struct {
@@ -63,7 +65,7 @@ func readObject(absPath string) GitObject {
 	return GitObject{Header: header, Size: contentSize, Content: content}
 }
 
-func (r *Repository) ListObjects() []GitObject {
+func (r *Repository) GetObjects() []GitObject {
 	objects := make([]GitObject, 1)
 
 	info, err := os.Stat(r.Path)
@@ -79,6 +81,10 @@ func (r *Repository) ListObjects() []GitObject {
 	err = filepath.Walk(r.Path+"/objects/", func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
+		}
+
+		if info.Name() == "pack" {
+			return filepath.SkipDir
 		}
 
 		if !info.IsDir() {
@@ -104,4 +110,32 @@ func (r *Repository) ListObjects() []GitObject {
 	}
 
 	return objects
+}
+
+// TODO: Handle gpg key in commit body
+func parseCommit(commit string) string {
+	commitInfo := strings.Split(commit, "\n")
+
+	tree := commitInfo[0]
+	parent := commitInfo[1]
+	author := commitInfo[2]
+	// NB: Git adds new line after commit message
+	msg := commitInfo[len(commitInfo)-2]
+
+	commitToPrint := []string{tree, parent, author, msg}
+
+	return strings.Join(commitToPrint, "\n")
+
+}
+
+func (r *Repository) Log() {
+	objects := r.GetObjects()
+
+	for _, obj := range objects {
+		if obj.Header == COMMIT {
+			fmt.Println(parseCommit(obj.Content))
+			fmt.Println("\n")
+		}
+	}
+
 }
