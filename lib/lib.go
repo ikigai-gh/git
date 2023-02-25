@@ -19,9 +19,9 @@ const (
 	TREE             GitObjectType = "tree"
 	BLOB             GitObjectType = "blob"
 	GIT_OBJ_NAME_LEN               = 2
+	GIT_OBJ_BUF_SIZE               = 512
 )
 
-// TODO: Add commit, tree
 type GitObject struct {
 	Header  GitObjectType
 	Size    int
@@ -32,27 +32,14 @@ type Repository struct {
 	Path string
 }
 
-func parseBlob(blob string) GitObject {
-	meta := strings.Split(blob, "\000")[0]
-	header := GitObjectType(strings.Split(meta, " ")[0])
-	contentSize, err := strconv.Atoi(strings.Split(meta, " ")[1])
-	if err != nil {
-		log.Fatal(err)
-	}
-	content := strings.Split(blob, "\000")[1]
-
-	return GitObject{Header: header, Size: contentSize, Content: content[:10]}
-}
-
 func readObject(absPath string) GitObject {
-	object := GitObject{}
-	raw_data, err := os.ReadFile(absPath)
+	rawData, err := os.ReadFile(absPath)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	reader := bytes.NewReader(raw_data)
+	reader := bytes.NewReader(rawData)
 
 	data, err := zlib.NewReader(reader)
 
@@ -60,22 +47,20 @@ func readObject(absPath string) GitObject {
 		log.Fatal(err)
 	}
 
-	// TODO: Think about an appropriate buffer size
-	buff := make([]byte, 500)
-
+	buff := make([]byte, GIT_OBJ_BUF_SIZE)
 	data.Read(buff)
+	objData := string(buff)
 
-	objHeader := GitObjectType(strings.Split(string(buff), " ")[0])
+	meta := strings.Split(objData, "\000")[0]
+	header := GitObjectType(strings.Split(meta, " ")[0])
+	contentSize, err := strconv.Atoi(strings.Split(meta, " ")[1])
 
 	if err != nil {
 		log.Fatal(err)
 	}
+	content := strings.Split(objData, "\000")[1]
 
-	if objHeader == BLOB {
-		object = parseBlob(string(buff))
-	}
-
-	return object
+	return GitObject{Header: header, Size: contentSize, Content: content}
 }
 
 func (r *Repository) ListObjects() []GitObject {
@@ -96,7 +81,7 @@ func (r *Repository) ListObjects() []GitObject {
 			return err
 		}
 
-		if !info.IsDir() && (info.Name() != "pack" || info.Name() != "info") {
+		if !info.IsDir() {
 			if err != nil {
 				log.Fatal(err)
 			}
