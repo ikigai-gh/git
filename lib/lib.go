@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -123,19 +124,34 @@ func parseCommit(commit string) string {
 	msg := commitInfo[len(commitInfo)-2]
 
 	commitToPrint := []string{tree, parent, author, msg}
+	commitObj := strings.Join(commitToPrint, "\n")
 
-	return strings.Join(commitToPrint, "\n")
-
+	return commitObj
 }
 
 func (r *Repository) Log() {
 	objects := r.GetObjects()
+	var commits []string
 
 	for _, obj := range objects {
 		if obj.Header == COMMIT {
-			fmt.Println(parseCommit(obj.Content))
-			fmt.Println("\n")
+			commit := parseCommit(obj.Content)
+			commits = append(commits, commit)
 		}
 	}
 
+	sort.Slice(commits, func(i, j int) bool {
+		author1 := strings.Split(commits[i], "\n")[2]
+		author2 := strings.Split(commits[j], "\n")[2]
+		commitTime1, err := strconv.Atoi(strings.Split(author1, " ")[len(strings.Split(author1, " "))-2])
+		commitTime2, err := strconv.Atoi(strings.Split(author2, " ")[len(strings.Split(author2, " "))-2])
+		if err != nil {
+			log.Fatal(err)
+		}
+		return commitTime1 > commitTime2
+	})
+
+	for _, c := range commits {
+		fmt.Println(c, "\n")
+	}
 }
